@@ -38,6 +38,13 @@ Type AR(vector<Type> x, Type log_sigma, Type logit_phi) {
 }
 
 template<class Type>
+Type ARIMA_1d0(vector<Type> x, SparseMatrix<Type> D, Type log_sigma, Type logit_phi) {
+  vector<Type> x_diff = (D * x);
+  
+  return AR(x_diff, log_sigma, logit_phi);
+}
+
+template<class Type>
 Type objective_function<Type>::operator() ()
 {
   DATA_VECTOR(Y1);
@@ -51,6 +58,11 @@ Type objective_function<Type>::operator() ()
   DATA_VECTOR(Y3);
   DATA_SCALAR(log_s3);
   DATA_SCALAR(logit_phi3);
+
+  DATA_VECTOR(Y4);
+  DATA_SPARSE_MATRIX(D4);
+  DATA_SCALAR(log_s4);
+  DATA_SCALAR(logit_phi4);
 
   PARAMETER(junk);
 
@@ -67,6 +79,10 @@ Type objective_function<Type>::operator() ()
   // AR1
   Type dens3 = AR(Y3, log_s3, logit_phi3);
   REPORT(dens3);
+
+  // ARIMA(1, d, 0)
+  Type dens4 = ARIMA_1d0(Y4, D4, log_s4, logit_phi4);
+  REPORT(dens4);
 
   return nll;
 }

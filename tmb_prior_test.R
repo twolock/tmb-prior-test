@@ -2,7 +2,9 @@ library(TMB)
 library(mvnfast)
 library(Matrix)
 
-set.seed(10)
+source('make_D_matrix.R')
+
+set.seed(1000)
 
 compile('tmb_prior_test.cpp', flags='-w')
 dyn.load(dynlib('tmb_prior_test'))
@@ -41,7 +43,7 @@ Y3 <- rep(0, p3)
 phi3 <- 0.5
 eps <- rnorm(p3-1, 0, s3)
 for (i in 2:p3) {
-  Y3[i] <- phi * Y3[i-1] + eps[i-1]
+  Y3[i] <- phi3 * Y3[i-1] + eps[i-1]
 }
 
 Y3_adj <- Y3 / s3
@@ -52,7 +54,22 @@ for (i in 2:p3) {
 }
 dens3 <- dens3 - (p3-1) * log(s3_ss)
 
-## IID x AR1
+## ARIMA(1, d, 0)
+p4 <- 100
+s4 <- 2
+d4 <- 3
+D4 <- make_D_matrix(p4, d4)
+Y4 <- rnorm(p4)
+phi4 <- 0.5
+
+Y4_diff <- (D4 %*% Y4) / s4
+dens4 <- dnorm(Y4_diff[1], 0, 1, T)
+s4_ss <- sqrt(1-phi4^2)
+for (i in 2:length(Y4_diff)) {
+  print(dens4)
+  dens4 <- dens4 + dnorm((Y4_diff[i]-phi4*Y4_diff[i-1])/s4_ss,0, 1, T)
+}
+dens4 <- dens4 - (length(Y4_diff)-1) * log(s4_ss)
 
 in_dat <- list(
   N = N,
@@ -66,8 +83,12 @@ in_dat <- list(
   
   Y3 = Y3,
   log_s3 = log(s3),
-  logit_phi3 = log(phi3/(1-phi3))
+  logit_phi3 = log(phi3/(1-phi3)),
   
+  Y4 = Y4,
+  D4 = as(D4, 'dgCMatrix'),
+  log_s4 = log(s4),
+  logit_phi4 = log(phi4/(1-phi4))
 )
 in_par <- list (
   junk = 0
@@ -77,3 +98,4 @@ obj <- MakeADFun(in_dat, in_par)
 cbind(dens1, obj$report()$dens1)
 cbind(dens2, obj$report()$dens2)
 cbind(dens3, obj$report()$dens3)
+cbind(dens4, obj$report()$dens4)
