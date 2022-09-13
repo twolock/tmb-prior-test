@@ -4,6 +4,17 @@ using namespace Eigen;
 using namespace density;
 
 template<class Type>
+array<Type> reshape(vector<Type> x, int N, int k) {
+  matrix<Type> y = x;
+  y.resize(N, k);
+  array<Type> a(N, k);
+  for (size_t i = 0; i < a.cols(); i++) {
+    a.col(i) = y.col(i);
+  }
+  return a;
+}
+
+template<class Type>
 Type IID(vector<Type> x, Type log_sigma, SparseMatrix<Type> Q) {
   Type sigma = exp(log_sigma);
   SparseMatrix<Type> Q_adj = (1/sigma) * Q;
@@ -40,8 +51,37 @@ Type AR(vector<Type> x, Type log_sigma, Type logit_phi) {
 template<class Type>
 Type ARIMA_1d0(vector<Type> x, SparseMatrix<Type> D, Type log_sigma, Type logit_phi) {
   vector<Type> x_diff = (D * x);
-  
+
   return AR(x_diff, log_sigma, logit_phi);
+}
+
+template<class Type>
+Type IID_IID(vector<Type> x, SparseMatrix<Type> Q1, SparseMatrix<Type> Q2,
+  Type log_sigma1, Type log_sigma2)
+{
+  array<Type> x_arr = reshape(x, Q1.rows(), Q2.cols());
+
+  Type sigma1 = exp(log_sigma1);
+  Type sigma2 = exp(log_sigma2);
+
+  SparseMatrix<Type> Q1_adj = (1/sigma1) * Q1;
+  SparseMatrix<Type> Q2_adj = (1/sigma2) * Q2;
+
+  Type res = -SEPARABLE(GMRF(Q2_adj), GMRF(Q1_adj))(x_arr);
+  return res;
+}
+
+template<class Type>
+Type IID_AR1(vector<Type> x, SparseMatrix<Type> Q1,
+  Type log_sigma, Type logit_phi2)
+{
+  array<Type> x_arr = reshape(x, Q1.rows(), x.size()/Q1.rows());
+
+  Type sigma = exp(log_sigma);
+  Type phi2 = 1 / (1 + exp(-logit_phi2));
+
+  Type res = -SEPARABLE(AR1(phi2), GMRF(Q1))(x_arr/sigma);
+  return res;
 }
 
 template<class Type>
@@ -64,6 +104,20 @@ Type objective_function<Type>::operator() ()
   DATA_SCALAR(log_s4);
   DATA_SCALAR(logit_phi4);
 
+  DATA_ARRAY(Y5);
+  DATA_VECTOR(Y5_v);
+  DATA_SCALAR(log_s5_1);
+  DATA_SCALAR(log_s5_2);
+  DATA_SPARSE_MATRIX(Q5_1);
+  DATA_SPARSE_MATRIX(Q5_2);
+
+  DATA_VECTOR(Y6);
+  DATA_SCALAR(log_s6_1);
+  DATA_SCALAR(log_s6_2);
+  DATA_SCALAR(logit_phi6_2);
+  DATA_SPARSE_MATRIX(Q6_1);
+  // DATA_SPARSE_MATRIX(Q6_2);
+
   PARAMETER(junk);
 
   Type nll = 0;
@@ -83,6 +137,12 @@ Type objective_function<Type>::operator() ()
   // ARIMA(1, d, 0)
   Type dens4 = ARIMA_1d0(Y4, D4, log_s4, logit_phi4);
   REPORT(dens4);
+
+  Type dens5 = IID_IID(Y5_v, Q5_1, Q5_2, log_s5_1, log_s5_2);
+  REPORT(dens5);
+
+  Type dens6 = IID_AR1(Y6, Q6_1, log_s6_1, logit_phi6_2);
+  REPORT(dens6);
 
   return nll;
 }
