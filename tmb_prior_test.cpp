@@ -56,7 +56,7 @@ Type ARIMA_1d0(vector<Type> x, SparseMatrix<Type> D, Type log_sigma, Type logit_
 }
 
 template<class Type>
-Type IID_IID(vector<Type> x, SparseMatrix<Type> Q1, SparseMatrix<Type> Q2,
+Type GMRF_GMRF(vector<Type> x, SparseMatrix<Type> Q1, SparseMatrix<Type> Q2,
   Type log_sigma1, Type log_sigma2)
 {
   array<Type> x_arr = reshape(x, Q1.rows(), Q2.cols());
@@ -72,10 +72,24 @@ Type IID_IID(vector<Type> x, SparseMatrix<Type> Q1, SparseMatrix<Type> Q2,
 }
 
 template<class Type>
-Type IID_AR1(vector<Type> x, SparseMatrix<Type> Q1,
+Type GMRF_AR1(vector<Type> x, SparseMatrix<Type> Q1,
   Type log_sigma, Type logit_phi2)
 {
   array<Type> x_arr = reshape(x, Q1.rows(), x.size()/Q1.rows());
+
+  Type sigma = exp(log_sigma);
+  Type phi2 = 1 / (1 + exp(-logit_phi2));
+
+  Type res = -SEPARABLE(AR1(phi2), GMRF(Q1))(x_arr/sigma);
+  return res;
+}
+
+template<class Type>
+Type GMRF_ARIMA(vector<Type> x, SparseMatrix<Type> Q1,
+  SparseMatrix<Type> D, Type log_sigma, Type logit_phi2)
+{
+  vector<Type> x_diff = (D * x);
+  array<Type> x_arr = reshape(x_diff, Q1.rows(), x_diff.size()/Q1.rows());
 
   Type sigma = exp(log_sigma);
   Type phi2 = 1 / (1 + exp(-logit_phi2));
@@ -113,10 +127,14 @@ Type objective_function<Type>::operator() ()
 
   DATA_VECTOR(Y6);
   DATA_SCALAR(log_s6_1);
-  DATA_SCALAR(log_s6_2);
   DATA_SCALAR(logit_phi6_2);
   DATA_SPARSE_MATRIX(Q6_1);
-  // DATA_SPARSE_MATRIX(Q6_2);
+
+  DATA_VECTOR(Y7);
+  DATA_SCALAR(log_s7_1);
+  DATA_SCALAR(logit_phi7_2);
+  DATA_SPARSE_MATRIX(Q7_1);
+  DATA_SPARSE_MATRIX(D7);
 
   PARAMETER(junk);
 
@@ -138,11 +156,14 @@ Type objective_function<Type>::operator() ()
   Type dens4 = ARIMA_1d0(Y4, D4, log_s4, logit_phi4);
   REPORT(dens4);
 
-  Type dens5 = IID_IID(Y5_v, Q5_1, Q5_2, log_s5_1, log_s5_2);
+  Type dens5 = GMRF_GMRF(Y5_v, Q5_1, Q5_2, log_s5_1, log_s5_2);
   REPORT(dens5);
 
-  Type dens6 = IID_AR1(Y6, Q6_1, log_s6_1, logit_phi6_2);
+  Type dens6 = GMRF_AR1(Y6, Q6_1, log_s6_1, logit_phi6_2);
   REPORT(dens6);
+
+  Type dens7 = GMRF_ARIMA(Y7, Q7_1, D7, log_s7_1, logit_phi7_2);
+  REPORT(dens7);
 
   return nll;
 }

@@ -95,9 +95,13 @@ s6_2 <- 1
 phi6_2 <- 0.5
 
 Q6_1 <- as(diag(1, p6_1, p6_1), 'dgCMatrix')
-# Q6_2 <- Q.AR1(p6_2, 1, phi6_2)
-# Y6 <- 1:()
-Y6 <- rnorm(p6_1 * p6_2)
+
+## IID is primary index, AR1 is secondary
+## Y6=(x_{11}, x_{12}, ... x_{1T}, x_{21}, ..., x_{2T}, ..., x{NT})
+## Confusingly in model.matrix language, this should be:
+## model.matrix(~ 0 + time:space)
+Y6 <- rep(1:p6_1, p6_2)
+
 S6_1 <- solve(Q6_1)
 S6_2 <- solve(Q.AR1(p6_2, 1, phi6_2))
 
@@ -105,6 +109,26 @@ S6 <- kronecker(S6_2, S6_1)
 s6_ss <- sqrt(1-phi6_2^2)
 dens6 <- dmvn(Y6/(s6_1*s6_ss), rep(0, p6_1 * p6_2), S6, log = T)
 dens6 <- dens6 - p6_2 * p6_1 * log(s6_ss)
+
+## GMRF x ARIMA(1, d, 0)
+p7_1 <- 10 ## IID dimension
+p7_2 <- 50 ## AR1 dimension
+s7_1 <- 2
+s7_2 <- 1
+phi7_2 <- 0.5
+
+D7 <- as(make_D_matrix_hier(p7_1, p7_2, 2), 'dgCMatrix')
+N_diff <- nrow(D7)/p7_1
+Q7_1 <- as(diag(1, p7_1, p7_1), 'dgCMatrix')
+Y7 <- rnorm(p7_1 * p7_2)
+Y7_diff <- D7 %*% Y7
+S7_1 <- solve(Q7_1)
+S7_2 <- solve(Q.AR1(N_diff, 1, phi7_2))
+
+S7 <- kronecker(S7_2, S7_1)
+s7_ss <- sqrt(1-phi7_2^2)
+dens7 <- dmvn(Y7_diff/(s7_1*s7_ss), rep(0, p7_1 * N_diff), S7, log = T)
+dens7 <- dens7 - N_diff * p7_1 * log(s7_ss)
 
 in_dat <- list(
   N = N,
@@ -136,8 +160,13 @@ in_dat <- list(
   log_s6_1 = log(s6_1),
   log_s6_2 = log(s6_2),
   logit_phi6_2 = log(phi6_2/(1-phi6_2)),
-  Q6_1 = Q6_1
-  # Q6_2 = Q6_2
+  Q6_1 = Q6_1,
+  
+  Y7 = Y7,
+  log_s7_1 = log(s7_1),
+  logit_phi7_2 = log(phi7_2/(1-phi7_2)),
+  Q7_1 = Q7_1,
+  D7 = D7
 )
 in_par <- list (
   junk = 0
@@ -150,4 +179,5 @@ cbind(dens3, obj$report()$dens3)
 cbind(dens4, obj$report()$dens4)
 cbind(dens5, obj$report()$dens5)
 cbind(dens6, obj$report()$dens6)
-
+cbind(dens6, obj$report()$dens6)
+cbind(dens7, obj$report()$dens7)
